@@ -14,48 +14,31 @@ uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["x
 
 @st.cache_data(ttl=300)
 def fetch_leaderboard():
-    url = "https://www.espn.com/golf/leaderboard"
+    url = "https://www.masters.com/en_US/scores/index.html"
     headers = {"User-Agent": "Mozilla/5.0"}
     resp = requests.get(url, headers=headers)
     soup = BeautifulSoup(resp.text, "lxml")
-    table = soup.find("table")
 
-    golfer_positions = []
-    if not table:
-        return golfer_positions
+    leaderboard_data = {}
+    script_tags = soup.find_all("script")
 
-    seen_golfers = set()
+    for script in script_tags:
+        if "masters.scoringData" in script.text:
+            try:
+                raw_json = re.search(r'masters\.scoringData\s*=\s*(\{.*?\});', script.text, re.DOTALL)
+                if raw_json:
+                    import json
+                    data = json.loads(raw_json.group(1))
+                    players = data.get("players", [])
+                    for idx, player in enumerate(sorted(players, key=lambda x: (x.get("posNum", 999), x.get("lastName", "")))):
+                        name = f"{player['firstName']} {player['lastName']}"
+                        position = player.get("posNum", 60)
+                        leaderboard_data[name] = idx + 1
+            except Exception as e:
+                st.error("Error parsing leaderboard data: " + str(e))
+            break
 
-    for row in table.find_all("tr")[1:]:
-        cols = row.find_all("td")
-        if len(cols) < 3:
-            continue
-        pos = cols[0].text.strip()
-        name = cols[2].text.strip()
-
-        if name in seen_golfers:
-            continue
-        seen_golfers.add(name)
-
-        # Normalize T ties (e.g., T2 -> 2)
-        if "T" in pos:
-            pos = pos.replace("T", "")
-        try:
-            rank = int(pos)
-        except:
-            rank = 60  # default for CUT, WD, etc.
-
-        golfer_positions.append((name, rank))
-
-    # Resolve ties by sorting alphabetically on name within same position
-    golfer_positions.sort(key=lambda x: (x[1], x[0].split()[-1]))
-
-    # Assign unique ranks
-    final_positions = {}
-    for idx, (name, _) in enumerate(golfer_positions):
-        final_positions[name] = idx + 1
-
-    return final_positions
+    return leaderboard_data
 
 
 def extract_player_name(entry):
