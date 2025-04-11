@@ -21,7 +21,15 @@ def fetch_leaderboard():
         data = response.json()
 
         leaderboard_data = {}
-        players = data.get("events", [])[0].get("competitions", [])[0].get("competitors", [])
+        events = data.get("events", [])
+        if not events:
+            raise ValueError("No event data available")
+
+        competitions = events[0].get("competitions", [])
+        if not competitions:
+            raise ValueError("No competition data available")
+
+        players = competitions[0].get("competitors", [])
 
         for player in players:
             athlete = player.get("athlete", {})
