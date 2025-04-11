@@ -43,23 +43,28 @@ uploaded_file = st.file_uploader("Upload your picks Excel file", type=["xlsx", "
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
 
-    # Ensure the dataframe includes required columns
-    if 'Name' not in df.columns or not any(col.startswith("Pick") for col in df.columns):
-        st.error("The Excel file must include a 'Name' column and at least one 'Pick' column.")
-    else:
-        pick_columns = [col for col in df.columns if col.startswith("Pick")]
+    # Gather all columns containing rankings
+    ranking_columns = [col for col in df.columns if col.lower().startswith("ranking")]
 
+    if 'Name' not in df.columns or not ranking_columns:
+        st.error("The Excel file must include a 'Name' column and at least one 'Ranking' column.")
+    else:
         # Normalize and score picks
         def get_score(player_name):
+            if pd.isna(player_name):
+                return 100
             name_only = player_name.split('-')[-1].strip()
             normalized = unidecode(name_only).lower().strip()
             return leaderboard_data.get(normalized, 100)
 
-        for col in pick_columns:
-            df[f"{col} (Pos)"] = df[col].apply(get_score)
+        all_position_columns = []
+        for col in ranking_columns:
+            pos_col = f"{col} (Pos)"
+            df[pos_col] = df[col].apply(get_score)
+            all_position_columns.append(pos_col)
 
-        position_columns = [f"{col} (Pos)" for col in pick_columns]
-        df['Total'] = df[position_columns].apply(lambda row: sum(sorted(row)[:5]), axis=1)
+        # Sum the lowest 5 position scores
+        df['Total'] = df[all_position_columns].apply(lambda row: sum(sorted(row)[:5]), axis=1)
         df = df.sort_values(by='Total')
 
         st.dataframe(df)
