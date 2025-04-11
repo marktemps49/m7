@@ -1,10 +1,9 @@
 # Masters 2025 Leaderboard Scoring App
-# Streamlit app using BeautifulSoup only
+# Streamlit app using Free Live Golf API
 
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 import re
 
 st.set_page_config(page_title="Masters 2025 Pool Leaderboard", layout="wide")
@@ -14,29 +13,33 @@ uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["x
 
 @st.cache_data(ttl=300)
 def fetch_leaderboard():
-    url = "https://www.espn.com/golf/leaderboard"
+    API_KEY = "905eba9f02494df58608deff8541236d"
     try:
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        soup = BeautifulSoup(response.text, "html.parser")
-        table = soup.find("table")
+        events_url = f"https://use.livegolfapi.com/v1/events?api_key={API_KEY}"
+        events_response = requests.get(events_url)
+        events = events_response.json()
 
-        if not table:
-            raise ValueError("Leaderboard table not found")
+        masters_event = next((event for event in events if "Masters Tournament" in event["name"]), None)
+
+        if not masters_event:
+            st.error("Masters Tournament not found.")
+            return {}
+
+        event_id = masters_event["id"]
+        leaderboard_url = f"https://use.livegolfapi.com/v1/events/{event_id}/leaderboard?api_key={API_KEY}"
+        leaderboard_response = requests.get(leaderboard_url)
+        leaderboard = leaderboard_response.json()
 
         leaderboard_data = {}
+        for player in leaderboard.get("players", []):
+            name = player.get("name")
+            position = player.get("position", "100")
 
-        for row in table.find_all("tr")[1:]:
-            cols = row.find_all("td")
-            if len(cols) < 3:
-                continue
-            pos = cols[0].text.strip()
-            name = cols[2].text.strip()
-
-            if pos.upper() in ["CUT", "WD", "DQ"]:
+            if position.upper() in ["CUT", "WD", "DQ"]:
                 rank = 100
             else:
                 try:
-                    rank = int(pos.replace("T", ""))
+                    rank = int(position.replace("T", ""))
                 except:
                     rank = 60
 
