@@ -4,8 +4,8 @@
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 import re
+import json
 
 st.set_page_config(page_title="Masters 2025 Pool Leaderboard", layout="wide")
 st.title("🏌️‍♂️ Masters 2025 Pool Leaderboard")
@@ -14,31 +14,36 @@ uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["x
 
 @st.cache_data(ttl=300)
 def fetch_leaderboard():
-    url = "https://www.masters.com/en_US/scores/index.html"
+    url = "https://statdata.pgatour.com/r/014/leaderboard-v2mini.json"  # Masters tournament ID
     headers = {"User-Agent": "Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
-    soup = BeautifulSoup(resp.text, "lxml")
+    try:
+        response = requests.get(url, headers=headers)
+        data = response.json()
 
-    leaderboard_data = {}
-    script_tags = soup.find_all("script")
+        leaderboard_data = {}
+        players = data.get("leaderboard", {}).get("players", [])
 
-    for script in script_tags:
-        if "masters.scoringData" in script.text:
-            try:
-                raw_json = re.search(r'masters\.scoringData\s*=\s*(\{.*?\});', script.text, re.DOTALL)
-                if raw_json:
-                    import json
-                    data = json.loads(raw_json.group(1))
-                    players = data.get("players", [])
-                    for idx, player in enumerate(sorted(players, key=lambda x: (x.get("posNum", 999), x.get("lastName", "")))):
-                        name = f"{player['firstName']} {player['lastName']}"
-                        position = player.get("posNum", 60)
-                        leaderboard_data[name] = idx + 1
-            except Exception as e:
-                st.error("Error parsing leaderboard data: " + str(e))
-            break
+        for player in players:
+            first_name = player.get("player_bio", {}).get("first_name", "")
+            last_name = player.get("player_bio", {}).get("last_name", "")
+            name = f"{first_name} {last_name}".strip()
+            position = player.get("current_position", "CUT")
 
-    return leaderboard_data
+            if position.upper() in ["CUT", "WD", "DQ"]:
+                rank = 60
+            else:
+                try:
+                    rank = int(position.replace("T", ""))
+                except:
+                    rank = 60
+
+            leaderboard_data[name] = rank
+
+        return leaderboard_data
+
+    except Exception as e:
+        st.error(f"Failed to fetch leaderboard data: {e}")
+        return {}
 
 
 def extract_player_name(entry):
