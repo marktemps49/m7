@@ -1,20 +1,20 @@
 
 # Masters 2025 Leaderboard Scoring App
-# Streamlit app using Free Live Golf API
+# Streamlit app using ESPN scraping fallback
 
 import streamlit as st
 import pandas as pd
 import re
 from unidecode import unidecode
 import requests
+from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="Masters 2025 Pool Leaderboard", layout="wide")
-st.title("🏉️ Masters 2025 Pool Leaderboard")
+st.title("🏌️ Masters 2025 Pool Leaderboard")
 
 uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["xlsx"])
 
 USE_MOCK_DATA = False
-API_KEY = "905eba9f02494df58608deff8541236d"  # Replace this after regenerating securely
 
 @st.cache_data(ttl=300)
 def fetch_leaderboard():
@@ -24,36 +24,39 @@ def fetch_leaderboard():
             "justin rose": 1,
             "scottie scheffler": 2,
             "ludvig aberg": 2,
-            # ... continue mock data ...
+            "corey conners": 2,
+            "bryson dechambeau": 5,
+            "tyrrell hatton": 5,
+            # ... extend mock data as needed ...
         }
         return leaderboard_data
     else:
         try:
-            url = "https://livegolfapi.com/api/v1/events/ae6be747-74ff-4ec0-bf15-52644a0bd19f/leaderboard"
-            headers = {
-                "accept": "application/json",
-                "Authorization": f"Bearer {API_KEY}"
-            }
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
+            url = "https://www.espn.com/golf/leaderboard"
+            response = requests.get(url)
+            soup = BeautifulSoup(response.content, "html.parser")
 
             leaderboard_data = {}
-            for player in data.get("players", []):
-                name = player.get("name", "")
-                position = player.get("position", "100")
-                if isinstance(position, str) and position.startswith("T"):
+            for row in soup.select("table tbody tr"):
+                cols = row.find_all("td")
+                if len(cols) < 2:
+                    continue
+                position = cols[0].text.strip()
+                name = cols[1].text.strip()
+
+                if position.startswith("T"):
                     position = position[1:]
                 try:
                     position = int(position)
                 except:
                     position = 100
+
                 normalized_name = unidecode(name).lower().strip()
                 leaderboard_data[normalized_name] = position
 
             return leaderboard_data
         except Exception as e:
-            st.warning(f"Failed to fetch live leaderboard: {e}")
+            st.warning(f"Failed to scrape leaderboard: {e}")
             return {}
 
 def extract_player_name(entry):
