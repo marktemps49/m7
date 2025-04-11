@@ -38,14 +38,14 @@ for row in rows:
     leaderboard_data[normalized_name] = position
 
 # Streamlit file upload
-uploaded_file = st.file_uploader("Upload your picks CSV file", type="csv")
+uploaded_file = st.file_uploader("Upload your picks Excel file", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+    df = pd.read_excel(uploaded_file)
 
     # Ensure the dataframe includes required columns
     if 'Name' not in df.columns or not any(col.startswith("Pick") for col in df.columns):
-        st.error("The CSV must include a 'Name' column and at least one 'Pick' column.")
+        st.error("The Excel file must include a 'Name' column and at least one 'Pick' column.")
     else:
         pick_columns = [col for col in df.columns if col.startswith("Pick")]
 
