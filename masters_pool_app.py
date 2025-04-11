@@ -14,6 +14,7 @@ st.title("🏉️ Masters 2025 Pool Leaderboard")
 uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["xlsx"])
 
 USE_MOCK_DATA = False
+API_KEY = "905eba9f02494df58608deff8541236d"  # Replace this after regenerating securely
 
 @st.cache_data(ttl=300)
 def fetch_leaderboard():
@@ -28,8 +29,11 @@ def fetch_leaderboard():
         return leaderboard_data
     else:
         try:
-            url = "https://livegolfapi.com/api/v1/tournaments/ae6be747-74ff-4ec0-bf15-52644a0bd19f/leaderboard"
-            headers = {"accept": "application/json"}
+            url = "https://livegolfapi.com/api/v1/events/ae6be747-74ff-4ec0-bf15-52644a0bd19f/leaderboard"
+            headers = {
+                "accept": "application/json",
+                "Authorization": f"Bearer {API_KEY}"
+            }
             response = requests.get(url, headers=headers)
             response.raise_for_status()
             data = response.json()
