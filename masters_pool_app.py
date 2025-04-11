@@ -14,20 +14,21 @@ uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["x
 
 @st.cache_data(ttl=300)
 def fetch_leaderboard():
-    url = "https://statdata.pgatour.com/r/014/leaderboard-v2mini.json"  # Masters tournament ID
+    url = "https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         response = requests.get(url, headers=headers)
         data = response.json()
 
         leaderboard_data = {}
-        players = data.get("leaderboard", {}).get("players", [])
+        players = data.get("events", [])[0].get("competitions", [])[0].get("competitors", [])
 
         for player in players:
-            first_name = player.get("player_bio", {}).get("first_name", "")
-            last_name = player.get("player_bio", {}).get("last_name", "")
+            athlete = player.get("athlete", {})
+            first_name = athlete.get("firstName", "")
+            last_name = athlete.get("lastName", "")
             name = f"{first_name} {last_name}".strip()
-            position = player.get("current_position", "CUT")
+            position = player.get("status", {}).get("position", {}).get("displayName", "CUT")
 
             if position.upper() in ["CUT", "WD", "DQ"]:
                 rank = 60
@@ -45,13 +46,11 @@ def fetch_leaderboard():
         st.error(f"Failed to fetch leaderboard data: {e}")
         return {}
 
-
 def extract_player_name(entry):
     if pd.isna(entry):
         return None
     match = re.match(r"\d+\s*-\s*(.*)", str(entry).strip())
     return match.group(1) if match else entry.strip()
-
 
 def process_file(df, leaderboard):
     name_col = "Name"
@@ -77,7 +76,6 @@ def process_file(df, leaderboard):
         user_scores.append(user_result)
 
     return pd.DataFrame(user_scores).sort_values("Total Score").reset_index(drop=True)
-
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
