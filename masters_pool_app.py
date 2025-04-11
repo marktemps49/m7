@@ -1,3 +1,4 @@
+
 import requests
 from bs4 import BeautifulSoup
 from unidecode import unidecode
@@ -36,48 +37,46 @@ for row in rows:
     normalized_name = unidecode(name).lower().strip()
     leaderboard_data[normalized_name] = (position, name)
 
-# Streamlit file upload
-uploaded_file = st.file_uploader("Upload your picks Excel file", type=["xlsx", "xls"])
+# Load entry picks from the repo file directly
+entry_file_path = "Masters2025_Entries.xlsx"
+df = pd.read_excel(entry_file_path)
 
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
+# Gather all columns containing rankings
+ranking_columns = [
+    "Ranking 1-10",
+    "Ranking 11-20",
+    "Ranking 21-30",
+    "Ranking 31-40",
+    "Ranking 41-50",
+    "Ranking 51-75",
+    "Ranking >75"
+]
 
-    # Gather all columns containing rankings
-    ranking_columns = [
-        "Ranking 1-10",
-        "Ranking 11-20",
-        "Ranking 21-30",
-        "Ranking 31-40",
-        "Ranking 41-50",
-        "Ranking 51-75",
-        "Ranking >75"
-    ]
+if 'Name' not in df.columns or not all(col in df.columns for col in ranking_columns):
+    st.error("The Excel file must include a 'Name' column and the required 'Ranking' columns.")
+else:
+    # Normalize and score picks
+    def get_score(player_name):
+        if pd.isna(player_name):
+            return 100, "(100)"
+        name_only = player_name.split('-')[-1].strip()
+        normalized = unidecode(name_only).lower().strip()
+        pos, full_name = leaderboard_data.get(normalized, (100, player_name))
+        surname = full_name.split()[-1] if full_name else player_name
+        return pos, f"{surname} ({pos})"
 
-    if 'Name' not in df.columns or not all(col in df.columns for col in ranking_columns):
-        st.error("The Excel file must include a 'Name' column and the required 'Ranking' columns.")
-    else:
-        # Normalize and score picks
-        def get_score(player_name):
-            if pd.isna(player_name):
-                return 100, "(100)"
-            name_only = player_name.split('-')[-1].strip()
-            normalized = unidecode(name_only).lower().strip()
-            pos, full_name = leaderboard_data.get(normalized, (100, player_name))
-            surname = full_name.split()[-1] if full_name else player_name
-            return pos, f"{surname} ({pos})"
+    display_columns = []
+    score_columns = []
+    for col in ranking_columns:
+        pos_col = f"{col} (Pos)"
+        df[[f"{pos_col}_score", pos_col]] = df[col].apply(lambda name: pd.Series(get_score(name)))
+        score_columns.append(f"{pos_col}_score")
+        display_columns.append(pos_col)
 
-        display_columns = []
-        score_columns = []
-        for col in ranking_columns:
-            pos_col = f"{col} (Pos)"
-            df[[f"{pos_col}_score", pos_col]] = df[col].apply(lambda name: pd.Series(get_score(name)))
-            score_columns.append(f"{pos_col}_score")
-            display_columns.append(pos_col)
+    # Sum the lowest 5 position scores
+    df['Total'] = df[score_columns].apply(lambda row: sum(sorted(row)[:5]), axis=1)
+    df = df.sort_values(by='Total')
 
-        # Sum the lowest 5 position scores
-        df['Total'] = df[score_columns].apply(lambda row: sum(sorted(row)[:5]), axis=1)
-        df = df.sort_values(by='Total')
-
-        display_columns = ['Name', 'Total'] + display_columns
-        st.dataframe(df[display_columns])
-        st.download_button("Download Results", df[display_columns].to_csv(index=False), file_name="scored_picks.csv")
+    display_columns = ['Name', 'Total'] + display_columns
+    st.dataframe(df[display_columns])
+    st.download_button("Download Results", df[display_columns].to_csv(index=False), file_name="scored_picks.csv")
