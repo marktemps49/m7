@@ -38,7 +38,7 @@ def fetch_leaderboard():
             return {}
 
         event_id = masters_event["id"]
-        leaderboard_url = f"https://use.livegolfapi.com/v1/tournaments/{event_id}?api_key={API_KEY}"
+        leaderboard_url = f"https://use.livegolfapi.com/v1/events/{event_id}?api_key={API_KEY}"
         leaderboard_response = requests.get(leaderboard_url)
         if leaderboard_response.status_code != 200:
             st.error(f"Failed to fetch leaderboard: {leaderboard_response.status_code}")
