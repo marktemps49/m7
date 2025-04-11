@@ -68,7 +68,12 @@ def process_file(df, leaderboard):
         seen_users.add(user)
 
         picks = [extract_player_name(row[col]) for col in pick_columns if extract_player_name(row[col])]
-        pick_scores = [(pick, leaderboard.get(pick, 100)) for pick in picks]
+        pick_scores = []
+        for pick in picks:
+            stripped_pick = re.sub(r"^\d+\s*-\s*", "", pick).strip()
+            score = leaderboard.get(stripped_pick, 100)
+            pick_scores.append((pick, score))
+
         total_score = sum(score for _, score in pick_scores)
 
         user_result = {"Player": user, "Total Score": total_score}
