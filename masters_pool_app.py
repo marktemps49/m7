@@ -1,119 +1,64 @@
 
-# Masters 2025 Leaderboard Scoring App
-# Streamlit app using ESPN scraping fallback
-
-import streamlit as st
-import pandas as pd
-import re
-from unidecode import unidecode
 import requests
 from bs4 import BeautifulSoup
+from unidecode import unidecode
+import pandas as pd
+import streamlit as st
 
-st.set_page_config(page_title="Masters 2025 Pool Leaderboard", layout="wide")
-st.title("🏌️ Masters 2025 Pool Leaderboard")
+st.title("Masters Pool Leaderboard")
 
-uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["xlsx"])
+# Dictionary to store leaderboard data
+leaderboard_data = {}
 
-USE_MOCK_DATA = False
+# Fetch the page from the livegolfapi documentation (HTML content only)
+url = "https://livegolfapi.com/documentation/tournaments/ae6be747-74ff-4ec0-bf15-52644a0bd19f"
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
+response = requests.get(url, headers=headers)
+soup = BeautifulSoup(response.content, "html.parser")
 
-@st.cache_data(ttl=300)
-def fetch_leaderboard():
-    if USE_MOCK_DATA:
-        st.info("Using mock leaderboard data.")
-        leaderboard_data = {
-            "justin rose": 1,
-            "scottie scheffler": 2,
-            "ludvig aberg": 2,
-            "corey conners": 2,
-            "bryson dechambeau": 5,
-            "tyrrell hatton": 5,
-            # ... extend mock data as needed ...
-        }
-        return leaderboard_data
+# Attempt to extract any table rows from the documentation page
+rows = soup.find_all("tr")
+for row in rows:
+    cols = row.find_all("td")
+    if len(cols) < 2:
+        continue
+    position = cols[0].text.strip()
+    name = cols[1].text.strip()
+
+    if position.startswith("T"):
+        position = position[1:]
+    try:
+        position = int(position)
+    except:
+        position = 100
+
+    normalized_name = unidecode(name).lower().strip()
+    leaderboard_data[normalized_name] = position
+
+# Streamlit file upload
+uploaded_file = st.file_uploader("Upload your picks CSV file", type="csv")
+
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
+
+    # Ensure the dataframe includes required columns
+    if 'Name' not in df.columns or not any(col.startswith("Pick") for col in df.columns):
+        st.error("The CSV must include a 'Name' column and at least one 'Pick' column.")
     else:
-        try:
-            url = "https://www.espn.com/golf/leaderboard"
-            response = requests.get(url)
-            soup = BeautifulSoup(response.content, "html.parser")
+        pick_columns = [col for col in df.columns if col.startswith("Pick")]
 
-            leaderboard_data = {}
-            for row in soup.select("table tbody tr"):
-                cols = row.find_all("td")
-                if len(cols) < 2:
-                    continue
-                position = cols[0].text.strip()
-                name = cols[1].text.strip()
+        # Normalize and score picks
+        def get_score(player_name):
+            normalized = unidecode(player_name).lower().strip()
+            return leaderboard_data.get(normalized, 100)
 
-                if position.startswith("T"):
-                    position = position[1:]
-                try:
-                    position = int(position)
-                except:
-                    position = 100
+        for col in pick_columns:
+            df[f"{col} (Pos)"] = df[col].apply(get_score)
 
-                normalized_name = unidecode(name).lower().strip()
-                leaderboard_data[normalized_name] = position
+        df['Total'] = df[[f"{col} (Pos)" for col in pick_columns]].sum(axis=1)
+        df = df.sort_values(by='Total')
 
-            return leaderboard_data
-        except Exception as e:
-            st.warning(f"Failed to scrape leaderboard: {e}")
-            return {}
-
-def extract_player_name(entry):
-    if pd.isna(entry):
-        return None
-    match = re.match(r"\d+\s*-\s*(.*)", str(entry).strip())
-    return match.group(1) if match else entry.strip()
-
-def process_file(df, leaderboard):
-    name_col = "Name"
-    pick_columns = [col for col in df.columns if "Ranking" in col]
-
-    normalized_lb = {
-        unidecode(name).lower().strip(): score for name, score in leaderboard.items()
-    }
-
-    user_scores = []
-    seen_users = set()
-    for _, row in df.iterrows():
-        user = row[name_col]
-        if user in seen_users:
-            continue
-        seen_users.add(user)
-
-        picks = [extract_player_name(row[col]) for col in pick_columns if extract_player_name(row[col])]
-        pick_scores = []
-        unmatched = []
-        for pick in picks:
-            normalized_name = unidecode(pick).lower().strip()
-            score = normalized_lb.get(normalized_name)
-            if score is None:
-                unmatched.append(pick)
-                score = 100
-            pick_scores.append((pick, score))
-
-        total_score = sum(score for _, score in pick_scores)
-
-        user_result = {"Player": user, "Total Score": total_score, "Unmatched Picks": ", ".join(unmatched)}
-        for i, (pick, score) in enumerate(pick_scores, 1):
-            user_result[f"Pick {i}"] = f"{pick} ({score})"
-
-        user_scores.append(user_result)
-
-    df_result = pd.DataFrame(user_scores).sort_values("Total Score").reset_index(drop=True)
-    df_result.index += 1
-    return df_result
-
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
-    leaderboard = fetch_leaderboard()
-    results_df = process_file(df, leaderboard)
-
-    st.success("Leaderboard generated successfully!")
-    st.dataframe(results_df, use_container_width=True)
-
-    csv_data = results_df.to_csv(index=False).encode('utf-8')
-    st.download_button("Download Results as CSV", data=csv_data,
-                       file_name="masters2025_leaderboard.csv", mime="text/csv")
-else:
-    st.info("Please upload the Excel file containing picks to begin.")
+        st.dataframe(df)
+        st.download_button("Download Results", df.to_csv(index=False), file_name="scored_picks.csv")
