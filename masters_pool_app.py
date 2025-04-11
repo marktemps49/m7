@@ -50,15 +50,17 @@ def fetch_leaderboard():
         st.json(leaderboard)
 
         leaderboard_data = {}
-        for player in leaderboard.get("players", []):
-            name = player.get("name")
-            position = player.get("position", "100")
+        for player in leaderboard.get("leaderboard", []):
+            first_name = player.get("first_name", "")
+            last_name = player.get("last_name", "")
+            name = f"{first_name} {last_name}".strip()
+            pos = str(player.get("position", "100"))
 
-            if position.upper() in ["CUT", "WD", "DQ"]:
+            if pos.upper() in ["CUT", "WD", "DQ"]:
                 rank = 100
             else:
                 try:
-                    rank = int(position.replace("T", ""))
+                    rank = int(pos.replace("T", ""))
                 except:
                     rank = 60
 
@@ -70,11 +72,13 @@ def fetch_leaderboard():
         st.error(f"Failed to fetch leaderboard data: {e}")
         return {}
 
+
 def extract_player_name(entry):
     if pd.isna(entry):
         return None
     match = re.match(r"\d+\s*-\s*(.*)", str(entry).strip())
     return match.group(1) if match else entry.strip()
+
 
 def process_file(df, leaderboard):
     name_col = "Name"
@@ -107,6 +111,7 @@ def process_file(df, leaderboard):
     df_result = pd.DataFrame(user_scores).sort_values("Total Score").reset_index(drop=True)
     df_result.index += 1
     return df_result
+
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
