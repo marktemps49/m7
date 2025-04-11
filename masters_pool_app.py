@@ -75,8 +75,12 @@ else:
 
     # Sum the lowest 5 position scores
     df['Total'] = df[score_columns].apply(lambda row: sum(sorted(row)[:5]), axis=1)
+
+    # Rank players by total score
+    df['Rank'] = df['Total'].rank(method='min').astype(int)
+
     df = df.sort_values(by='Total')
 
-    display_columns = ['Name', 'Total'] + display_columns
+    display_columns = ['Name', 'Total', 'Rank'] + display_columns
     st.dataframe(df[display_columns])
     st.download_button("Download Results", df[display_columns].to_csv(index=False), file_name="scored_picks.csv")
