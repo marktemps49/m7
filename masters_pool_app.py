@@ -22,7 +22,14 @@ def fetch_leaderboard():
             st.text(events_response.text)
             return {}
 
-        events = events_response.json()
+        if events_response.headers.get("Content-Type") == "application/json":
+            events = events_response.json()
+            st.subheader("Available Events from API:")
+            st.json(events)
+        else:
+            st.error("Events response not JSON")
+            st.text(events_response.text)
+            return {}
 
         masters_event = next((event for event in events if "Masters Tournament" in event["name"]), None)
 
@@ -31,7 +38,7 @@ def fetch_leaderboard():
             return {}
 
         event_id = masters_event["id"]
-        leaderboard_url = f"https://use.livegolfapi.com/v1/events/{event_id}/leaderboard?api_key={API_KEY}"
+        leaderboard_url = f"https://use.livegolfapi.com/v1/tournaments/{event_id}?api_key={API_KEY}"
         leaderboard_response = requests.get(leaderboard_url)
         if leaderboard_response.status_code != 200:
             st.error(f"Failed to fetch leaderboard: {leaderboard_response.status_code}")
@@ -39,6 +46,8 @@ def fetch_leaderboard():
             return {}
 
         leaderboard = leaderboard_response.json()
+        st.subheader("Leaderboard Raw Data")
+        st.json(leaderboard)
 
         leaderboard_data = {}
         for player in leaderboard.get("players", []):
