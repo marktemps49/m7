@@ -28,7 +28,7 @@ def fetch_leaderboard():
         return leaderboard_data
     else:
         try:
-            url = "https://livegolfapi.com/api/v1/events/ae6be747-74ff-4ec0-bf15-52644a0bd19f/leaderboard"
+            url = "https://livegolfapi.com/api/v1/tournaments/ae6be747-74ff-4ec0-bf15-52644a0bd19f/leaderboard"
             headers = {"accept": "application/json"}
             response = requests.get(url, headers=headers)
             response.raise_for_status()
