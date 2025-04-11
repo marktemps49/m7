@@ -1,3 +1,4 @@
+
 # Masters 2025 Leaderboard Scoring App
 # Streamlit app using Free Live Golf API
 
@@ -38,7 +39,7 @@ def fetch_leaderboard():
             return {}
 
         event_id = masters_event["id"]
-        leaderboard_url = f"https://use.livegolfapi.com/v1/tournaments/{event_id}/leaderboard?api_key={API_KEY}"
+        leaderboard_url = f"https://use.livegolfapi.com/v1/events/{event_id}/scorecards?api_key={API_KEY}"
         leaderboard_response = requests.get(leaderboard_url)
         if leaderboard_response.status_code != 200:
             st.error(f"Failed to fetch leaderboard: {leaderboard_response.status_code}")
@@ -47,22 +48,33 @@ def fetch_leaderboard():
 
         leaderboard = leaderboard_response.json()
         st.subheader("Leaderboard Raw Data")
-        st.json(leaderboard)
+        st.write("Top-level keys:", list(leaderboard.keys()))
+        if "players" in leaderboard:
+            st.write("First player example:", leaderboard["players"][0])
+        elif "scorecards" in leaderboard:
+            st.write("First scorecard example:", leaderboard["scorecards"][0])
+        else:
+            st.write("Unexpected data format:", leaderboard)
 
         leaderboard_data = {}
-        for player in leaderboard.get("players", []):
-            name = player.get("name", "").strip()
-            pos = str(player.get("position", "100"))
+        if "scorecards" in leaderboard and leaderboard["scorecards"]:
+            for player in leaderboard["scorecards"]:
+                first = player.get("first_name", "").strip()
+                last = player.get("last_name", "").strip()
+                name = f"{first} {last}".strip()
+                pos = str(player.get("position", "100"))
 
-            if pos.upper() in ["CUT", "WD", "DQ"]:
-                rank = 100
-            else:
-                try:
-                    rank = int(pos.replace("T", ""))
-                except:
-                    rank = 60
+                if pos.upper() in ["CUT", "WD", "DQ"]:
+                    rank = 100
+                else:
+                    try:
+                        rank = int(pos.replace("T", ""))
+                    except:
+                        rank = 60
 
-            leaderboard_data[name] = rank
+                leaderboard_data[name] = rank
+        else:
+            st.warning("No scorecard data available yet for this tournament.")
 
         return leaderboard_data
 
@@ -70,11 +82,13 @@ def fetch_leaderboard():
         st.error(f"Failed to fetch leaderboard data: {e}")
         return {}
 
+
 def extract_player_name(entry):
     if pd.isna(entry):
         return None
     match = re.match(r"\d+\s*-\s*(.*)", str(entry).strip())
     return match.group(1) if match else entry.strip()
+
 
 def process_file(df, leaderboard):
     name_col = "Name"
@@ -107,6 +121,7 @@ def process_file(df, leaderboard):
     df_result = pd.DataFrame(user_scores).sort_values("Total Score").reset_index(drop=True)
     df_result.index += 1
     return df_result
+
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
