@@ -14,7 +14,7 @@ uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["x
 
 @st.cache_data(ttl=300)
 def fetch_leaderboard():
-    url = "https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard"
+    url = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         response = requests.get(url, headers=headers)
@@ -28,13 +28,22 @@ def fetch_leaderboard():
             first_name = athlete.get("firstName", "")
             last_name = athlete.get("lastName", "")
             name = f"{first_name} {last_name}".strip()
-            position = player.get("status", {}).get("position", {}).get("displayName", "CUT")
+            stats = player.get("statistics", [])
+
+            position = None
+            for stat in stats:
+                if stat.get("name") == "position":
+                    position = stat.get("displayValue")
+                    break
+
+            if not position:
+                position = player.get("status", {}).get("position", {}).get("displayName", "CUT")
 
             if position.upper() in ["CUT", "WD", "DQ"]:
                 rank = 60
             else:
                 try:
-                    rank = int(position.replace("T", ""))
+                    rank = int(position.replace("T", ""))  # e.g. T2 becomes 2
                 except:
                     rank = 60
 
