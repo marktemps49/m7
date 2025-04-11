@@ -1,11 +1,14 @@
 # Masters 2025 Leaderboard Scoring App
-# Streamlit app
+# Streamlit app with Selenium for dynamic content
 
 import streamlit as st
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
 import re
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from bs4 import BeautifulSoup
+import time
 
 st.set_page_config(page_title="Masters 2025 Pool Leaderboard", layout="wide")
 st.title("🏌️‍♂️ Masters 2025 Pool Leaderboard")
@@ -15,12 +18,19 @@ uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["x
 @st.cache_data(ttl=300)
 def fetch_leaderboard():
     url = "https://www.espn.com/golf/leaderboard"
-    headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        response = requests.get(url, headers=headers)
-        soup = BeautifulSoup(response.text, "html.parser")
-        table = soup.find("table")
+        options = Options()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        driver = webdriver.Chrome(options=options)
+        driver.get(url)
+        time.sleep(5)  # Wait for JavaScript to render
 
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        driver.quit()
+
+        table = soup.find("table")
         if not table:
             raise ValueError("Leaderboard table not found")
 
@@ -49,11 +59,13 @@ def fetch_leaderboard():
         st.error(f"Failed to fetch leaderboard data: {e}")
         return {}
 
+
 def extract_player_name(entry):
     if pd.isna(entry):
         return None
     match = re.match(r"\d+\s*-\s*(.*)", str(entry).strip())
     return match.group(1) if match else entry.strip()
+
 
 def process_file(df, leaderboard):
     name_col = "Name"
@@ -81,6 +93,7 @@ def process_file(df, leaderboard):
     df_result = pd.DataFrame(user_scores).sort_values("Total Score").reset_index(drop=True)
     df_result.index += 1
     return df_result
+
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
