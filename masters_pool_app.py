@@ -5,6 +5,7 @@ from unidecode import unidecode
 import pandas as pd
 import streamlit as st
 
+st.set_page_config(layout="wide")
 st.title("Masters Pool Leaderboard")
 
 # Dictionary to store leaderboard data
@@ -63,24 +64,29 @@ else:
         normalized = unidecode(name_only).lower().strip()
         pos, full_name = leaderboard_data.get(normalized, (100, player_name))
         surname = full_name.split()[-1] if full_name else player_name
-        return pos, f"{surname} ({pos})"
+        return pos, f"**{surname} ({pos})**" if pos in row_sorted_scores[:5] else f"{surname} ({pos})"
 
     display_columns = []
     score_columns = []
     for col in ranking_columns:
         pos_col = f"{col} (Pos)"
-        df[[f"{pos_col}_score", pos_col]] = df[col].apply(lambda name: pd.Series(get_score(name)))
+        df[[f"{pos_col}_score", pos_col]] = df[col].apply(lambda name: pd.Series((lambda: get_score(name))()))
         score_columns.append(f"{pos_col}_score")
         display_columns.append(pos_col)
 
-    # Sum the lowest 5 position scores
-    df['Total'] = df[score_columns].apply(lambda row: sum(sorted(row)[:5]), axis=1)
+    # Sum the lowest 5 position scores and track those positions for highlighting
+    all_scores = df[score_columns].values.tolist()
+    top_5_scores_indices = [sorted(range(len(scores)), key=lambda i: scores[i])[:5] for scores in all_scores]
+    df['Total'] = [sum([scores[i] for i in top5]) for scores, top5 in zip(all_scores, top_5_scores_indices)]
 
     # Rank players by total score
     df['Rank'] = df['Total'].rank(method='min').astype(int)
-
     df = df.sort_values(by='Total')
 
     display_columns = ['Name', 'Total', 'Rank'] + display_columns
-    st.dataframe(df[display_columns])
+    styled_df = df[display_columns].style.set_table_styles([
+        {'selector': 'thead', 'props': [('background-color', '#007A33'), ('color', 'white')]}
+    ])
+
+    st.dataframe(styled_df, use_container_width=True)
     st.download_button("Download Results", df[display_columns].to_csv(index=False), file_name="scored_picks.csv")
