@@ -1,83 +1,126 @@
-
 # Masters 2025 Leaderboard Scoring App
 # Streamlit app using Free Live Golf API
 
 import streamlit as st
 import pandas as pd
-import requests
+import re
+from unidecode import unidecode
 import re
 
 st.set_page_config(page_title="Masters 2025 Pool Leaderboard", layout="wide")
-st.title("🏌️‍♂️ Masters 2025 Pool Leaderboard")
+st.title("🏉️ Masters 2025 Pool Leaderboard")
 
 uploaded_file = st.file_uploader("Upload Excel file with player picks", type=["xlsx"])
 
-@st.cache_data(ttl=300)
+USE_MOCK_DATA = True
+
+@st.cache_data(ttl=300)  # Toggle this to use simulated leaderboard data
+
 def fetch_leaderboard():
     API_KEY = "905eba9f02494df58608deff8541236d"
-    try:
-        events_url = f"https://use.livegolfapi.com/v1/events?api_key={API_KEY}"
-        events_response = requests.get(events_url)
-        if events_response.status_code != 200:
-            st.error(f"Failed to fetch events: {events_response.status_code}")
-            st.text(events_response.text)
-            return {}
-
-        if events_response.headers.get("Content-Type") == "application/json":
-            events = events_response.json()
-            st.subheader("Available Events from API:")
-            st.json(events)
-        else:
-            st.error("Events response not JSON")
-            st.text(events_response.text)
-            return {}
-
-        masters_event = next((event for event in events if "Masters Tournament" in event["name"]), None)
-
-        if not masters_event:
-            st.error("Masters Tournament not found.")
-            return {}
-
-        event_id = masters_event["id"]
-        leaderboard_url = f"https://use.livegolfapi.com/v1/events/{event_id}/scorecards?api_key={API_KEY}"
-        leaderboard_response = requests.get(leaderboard_url)
-        if leaderboard_response.status_code != 200:
-            st.error(f"Failed to fetch leaderboard: {leaderboard_response.status_code}")
-            st.text(leaderboard_response.text)
-            return {}
-
-        leaderboard = leaderboard_response.json()
-        st.subheader("Leaderboard Raw Data")
-        st.write("Top-level keys:", list(leaderboard.keys()))
-        if "players" in leaderboard:
-            st.write("First player example:", leaderboard["players"][0])
-        elif "scorecards" in leaderboard:
-            st.write("First scorecard example:", leaderboard["scorecards"][0])
-        else:
-            st.write("Unexpected data format:", leaderboard)
-
-        leaderboard_data = {}
-        if "scorecards" in leaderboard and leaderboard["scorecards"]:
-            for player in leaderboard["scorecards"]:
-                first = player.get("first_name", "").strip()
-                last = player.get("last_name", "").strip()
-                name = f"{first} {last}".strip()
-                pos = str(player.get("position", "100"))
-
-                if pos.upper() in ["CUT", "WD", "DQ"]:
-                    rank = 100
-                else:
-                    try:
-                        rank = int(pos.replace("T", ""))
-                    except:
-                        rank = 60
-
-                leaderboard_data[name] = rank
-        else:
-            st.warning("No scorecard data available yet for this tournament.")
-
+    if USE_MOCK_DATA:
+        st.info("Using mock leaderboard data.")
+        leaderboard_data = {
+            "Justin Rose": 1,
+            "Scottie Scheffler": 2,
+            "Ludvig Åberg": 2,
+            "Corey Conners": 2,
+            "Bryson DeChambeau": 5,
+            "Tyrrell Hatton": 5,
+            "Jason Day": 7,
+            "Akshay Bhatia": 7,
+            "Aaron Rai": 7,
+            "Harris English": 7,
+            "Denny McCarthy": 11,
+            "Fred Couples": 11,
+            "Davis Thompson": 11,
+            "Brian Harman": 11,
+            "Patrick Reed": 11,
+            "Viktor Hovland": 11,
+            "Matt McCarty": 11,
+            "Sungjae Im": 11,
+            "Cameron Smith": 11,
+            "Matt Fitzpatrick": 11,
+            "Min Woo Lee": 11,
+            "Daniel Berger": 11,
+            "Max Greyserman": 11,
+            "Shane Lowry": 11,
+            "Michael Kim": 11,
+            "Bubba Watson": 11,
+            "Sahith Theegala": 27,
+            "Cameron Young": 27,
+            "Maverick McNealy": 27,
+            "Sergio Garcia": 27,
+            "Brian Campbell": 27,
+            "Stephan Jaeger": 27,
+            "Rory McIlroy": 27,
+            "Zach Johnson": 27,
+            "Collin Morikawa": 27,
+            "Joaquin Niemann": 27,
+            "Tom Hoge": 27,
+            "Hiroshi Tai (a)": 38,
+            "Nick Taylor": 38,
+            "Rasmus Højgaard": 38,
+            "Nico Echavarria": 38,
+            "Adam Schenk": 38,
+            "Sam Burns": 38,
+            "Justin Thomas": 38,
+            "Jordan Spieth": 38,
+            "Tom Kim": 38,
+            "Tommy Fleetwood": 38,
+            "Hideki Matsuyama": 38,
+            "Xander Schauffele": 38,
+            "Davis Riley": 38,
+            "Charl Schwartzel": 51,
+            "Bernhard Langer": 51,
+            "Will Zalatoris": 51,
+            "Byeong Hun An": 51,
+            "Keegan Bradley": 51,
+            "Cam Davis": 51,
+            "Max Homa": 51,
+            "J.J. Spaun": 51,
+            "Dustin Johnson": 51,
+            "Patrick Cantlay": 51,
+            "Brooks Koepka": 51,
+            "J.T. Poston": 51,
+            "Mike Weir": 63,
+            "Jhonattan Vegas": 63,
+            "Ángel Cabrera": 63,
+            "Rafael Campos": 63,
+            "Jon Rahm": 63,
+            "Tony Finau": 63,
+            "Phil Mickelson": 63,
+            "Danny Willett": 63,
+            "Robert MacIntyre": 63,
+            "Chris Kirk": 63,
+            "Nicolai Højgaard": 73,
+            "Jose Luis Ballester Barrio (a)": 73,
+            "Wyndham Clark": 73,
+            "Joe Highsmith": 73,
+            "Christiaan Bezuidenhout": 73,
+            "Justin Hastings (a)": 73,
+            "Kevin Yu": 73,
+            "Austin Eckroat": 73,
+            "Laurie Canter": 81,
+            "Evan Beck (a)": 81,
+            "José María Olazábal": 81,
+            "Taylor Pendrith": 81,
+            "Billy Horschel": 81,
+            "Adam Scott": 81,
+            "Sepp Straka": 87,
+            "Matthieu Pavon": 87,
+            "Lucas Glover": 87,
+            "Noah Kent (a)": 90,
+            "Thomas Detry": 90,
+            "Thriston Lawrence": 90,
+            "Russell Henley": 90,
+            "Patton Kizzire": 90,
+            "Nick Dunlap": 95
+        }
         return leaderboard_data
 
+    try:
+        pass  # Live API logic would go here
     except Exception as e:
         st.error(f"Failed to fetch leaderboard data: {e}")
         return {}
@@ -94,8 +137,10 @@ def process_file(df, leaderboard):
     name_col = "Name"
     pick_columns = [col for col in df.columns if "Ranking" in col]
 
-    user_scores = []
+    # Normalize leaderboard
+    normalized_lb = {unidecode(name).lower().strip(): pos for name, pos in leaderboard.items()}
 
+    user_scores = []
     seen_users = set()
     for _, row in df.iterrows():
         user = row[name_col]
@@ -107,7 +152,11 @@ def process_file(df, leaderboard):
         pick_scores = []
         for pick in picks:
             stripped_pick = re.sub(r"^\d+\s*-\s*", "", pick).strip()
-            score = leaderboard.get(stripped_pick, 100)
+            normalized_name = unidecode(stripped_pick).lower().strip()
+            st.write(f"Looking up: '{normalized_name}'")
+            st.write(f"Found in leaderboard: {normalized_name in normalized_lb}")
+            st.write(f"Normalized leaderboard keys: {list(normalized_lb.keys())[:10]}")
+            score = normalized_lb.get(normalized_name, 100)
             pick_scores.append((pick, score))
 
         total_score = sum(score for _, score in pick_scores)
