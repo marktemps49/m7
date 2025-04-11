@@ -1,4 +1,3 @@
-
 # Masters 2025 Leaderboard Scoring App
 # Streamlit app
 
@@ -25,12 +24,18 @@ def fetch_leaderboard():
     if not table:
         return golfer_positions
 
+    seen_golfers = set()
+
     for row in table.find_all("tr")[1:]:
         cols = row.find_all("td")
         if len(cols) < 3:
             continue
         pos = cols[0].text.strip()
         name = cols[2].text.strip()
+
+        if name in seen_golfers:
+            continue
+        seen_golfers.add(name)
 
         # Normalize T ties (e.g., T2 -> 2)
         if "T" in pos:
@@ -66,11 +71,22 @@ def process_file(df, leaderboard):
 
     user_scores = []
 
+    seen_users = set()
     for _, row in df.iterrows():
         user = row[name_col]
+        if user in seen_users:
+            continue  # Skip duplicate user entries
+        seen_users.add(user)
+
         picks = [extract_player_name(row[col]) for col in pick_columns if extract_player_name(row[col])]
-        total_score = sum([leaderboard.get(pick, 60) for pick in picks])
-        user_scores.append({"Name": user, "Total Score": total_score})
+        pick_scores = [(pick, leaderboard.get(pick, 60)) for pick in picks]
+        total_score = sum(score for _, score in pick_scores)
+
+        user_result = {"Player": user, "Total Score": total_score}
+        for i, (pick, score) in enumerate(pick_scores, 1):
+            user_result[f"Pick {i}"] = f"{pick} ({score})"
+
+        user_scores.append(user_result)
 
     return pd.DataFrame(user_scores).sort_values("Total Score").reset_index(drop=True)
 
