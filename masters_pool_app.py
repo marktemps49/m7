@@ -38,7 +38,7 @@ def fetch_leaderboard():
             return {}
 
         event_id = masters_event["id"]
-        leaderboard_url = f"https://use.livegolfapi.com/v1/events/{event_id}?api_key={API_KEY}"
+        leaderboard_url = f"https://use.livegolfapi.com/v1/tournaments/{event_id}/leaderboard?api_key={API_KEY}"
         leaderboard_response = requests.get(leaderboard_url)
         if leaderboard_response.status_code != 200:
             st.error(f"Failed to fetch leaderboard: {leaderboard_response.status_code}")
@@ -50,10 +50,8 @@ def fetch_leaderboard():
         st.json(leaderboard)
 
         leaderboard_data = {}
-        for player in leaderboard.get("leaderboard", []):
-            first_name = player.get("first_name", "")
-            last_name = player.get("last_name", "")
-            name = f"{first_name} {last_name}".strip()
+        for player in leaderboard.get("players", []):
+            name = player.get("name", "").strip()
             pos = str(player.get("position", "100"))
 
             if pos.upper() in ["CUT", "WD", "DQ"]:
@@ -72,13 +70,11 @@ def fetch_leaderboard():
         st.error(f"Failed to fetch leaderboard data: {e}")
         return {}
 
-
 def extract_player_name(entry):
     if pd.isna(entry):
         return None
     match = re.match(r"\d+\s*-\s*(.*)", str(entry).strip())
     return match.group(1) if match else entry.strip()
-
 
 def process_file(df, leaderboard):
     name_col = "Name"
@@ -111,7 +107,6 @@ def process_file(df, leaderboard):
     df_result = pd.DataFrame(user_scores).sort_values("Total Score").reset_index(drop=True)
     df_result.index += 1
     return df_result
-
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
